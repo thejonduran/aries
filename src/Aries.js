@@ -20,11 +20,11 @@ class Aries {
 
         // Load system persona
         try {
-            const personaPath = path.join(__dirname, 'Agent.md');
+            const personaPath = path.join(__dirname, 'Aries.md');
             const persona = fs.readFileSync(personaPath, 'utf8').trim();
             this.chatClient.setSystemMessage(persona);
         } catch (error) {
-            this.logger.error('Failed to load Agent.md', error);
+            this.logger.error('Failed to load Aries.md', error);
             // Fallback
             this.chatClient.setSystemMessage('You are Aries, a helpful and intelligent AI assistant.');
         }
