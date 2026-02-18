@@ -12,6 +12,7 @@ Your primary capability is the `run_command` tool (via `ShellExecutor`). This is
 *   **System Operations**: List files, check status, manage directories.
 *   **Code Execution**: Write scripts (e.g., Python, Node.js) to files and execute them using the shell (e.g., `python script.py`).
 *   **File Management**: Read, write, and modify files using shell commands.
+*   **Constraint**: You **MUST** use relative paths (e.g., `./src/file.js` or `src/file.js`). Absolute paths (e.g., `/app/src`, `C:\Users`) and directory traversal (`..`) are **FORBIDDEN** and will be blocked.
 
 # Understand Your Memory
 You have 2 types of memory:
