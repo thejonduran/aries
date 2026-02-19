@@ -9,6 +9,22 @@ class ChatClient {
         this.toolRegistry = toolRegistry;
         this.logger = logger;
         this.messages = [];
+
+        // Subscribe to logger events
+        if (this.logger && typeof this.logger.onLog === 'function') {
+            this.logger.onLog((logEvent) => {
+                this.messages.push({
+                    role: 'debug',
+                    content: `[${logEvent.level}] ${logEvent.message}`,
+                    timestamp: logEvent.timestamp,
+                    data: logEvent.data
+                });
+            });
+        }
+
+        // Tool Loop Safety
+        this.consecutiveToolCalls = 0;
+        this.toolLimit = parseInt(process.env.TOOL_CALL_LIMIT) || 5;
     }
 
     setSystemMessage(content) {
@@ -30,6 +46,7 @@ class ChatClient {
 
     clearHistory() {
         this.messages = [];
+        this.consecutiveToolCalls = 0;
     }
 
     /**
@@ -38,10 +55,11 @@ class ChatClient {
      * @param {string} content - User message content
      */
     async *chat(content) {
-        // If content is provided, add it as a user message
+        // If content is provided (user message), reset the tool counter
         if (content) {
             this.addMessage('user', content);
             if (this.logger) this.logger.info(`User message received: ${content.substring(0, 50)}...`);
+            this.consecutiveToolCalls = 0;
         }
 
         // Prepare options
@@ -57,7 +75,11 @@ class ChatClient {
         let response;
         try {
             if (this.logger) this.logger.debug('Sending request to LLM...');
-            response = await this.llmClient.sendChatCompletion(this.messages, options);
+
+            // Filter out debug messages before sending to LLM
+            const messagesToSend = this.messages.filter(m => m.role !== 'debug');
+
+            response = await this.llmClient.sendChatCompletion(messagesToSend, options);
         } catch (error) {
             console.error("ChatClient Error calling LLM:", error);
             if (this.logger) this.logger.error("Error calling LLM", error);
@@ -145,11 +167,25 @@ class ChatClient {
                     });
                 }
 
-                // RECURSIVE CALL: Get the next response from LLM (without new user input)
-                yield* this.chat(null);
+                // Track consecutive tool calls
+                this.consecutiveToolCalls++;
+
+                // Check limit
+                if (this.consecutiveToolCalls >= this.toolLimit) {
+                    const limitMsg = `[System] You have reached the consecutive tool call limit of ${this.toolLimit}. Stop executing tools. Summarize your progress so far and ask the user if you should proceed.`;
+                    this.messages.push({ role: 'system', content: limitMsg });
+
+                    if (this.logger) this.logger.warn(`Tool limit reached (${this.toolLimit}). Injecting stop command.`);
+
+                    // Recursive call to let the LLM see the system message and respond (generate summary)
+                    yield* this.chat(null);
+                } else {
+                    // RECURSIVE CALL: Get the next response from LLM (without new user input)
+                    yield* this.chat(null);
+                }
 
             } else {
-                // Normal response
+                // Normal response (no tools)
                 this.addMessage('assistant', fullResponse);
             }
 

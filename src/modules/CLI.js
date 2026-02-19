@@ -11,11 +11,43 @@ class CLI {
             output: process.stdout,
             prompt: '> '
         });
+
+        this.showDebug = process.env.DEBUG === 'true';
+
+        // Subscribe to logger events for real-time output
+        if (this.chatClient.logger && typeof this.chatClient.logger.onLog === 'function') {
+            this.chatClient.logger.onLog((log) => {
+                // Always show INFO, WARN, ERROR. Show DEBUG only if enabled.
+                if (log.level === 'DEBUG' && !this.showDebug) return;
+
+                const timestamp = log.timestamp; // Use timestamp from event
+                let logMsg = `[${timestamp}] [${log.level}] ${log.message}`;
+
+                if (log.data) {
+                    if (log.data instanceof Error) {
+                        logMsg += `\n${log.data.stack || log.data.message}`;
+                    } else {
+                        logMsg += `\n${JSON.stringify(log.data, null, 2)}`;
+                    }
+                }
+
+                // Use console methods to distinguish output streams/colors if needed, 
+                // but for now simple console.log/error matches previous behavior.
+                if (log.level === 'ERROR') {
+                    console.error(logMsg);
+                } else if (log.level === 'WARN') {
+                    console.warn(logMsg);
+                } else {
+                    console.log(logMsg);
+                }
+            });
+        }
     }
 
     start() {
         console.log('--- Aries Engine CLI ---');
         console.log('Type your message or /exit to quit.');
+        console.log(`Debug mode is ${this.showDebug ? 'ON' : 'OFF'} (toggle with /debug)`);
 
         this.rl.prompt();
 
@@ -40,6 +72,10 @@ class CLI {
             case '/exit':
             case '/quit':
                 this.rl.close();
+                break;
+            case '/debug':
+                this.showDebug = !this.showDebug;
+                console.log(`Debug mode ${this.showDebug ? 'ENABLED' : 'DISABLED'}`);
                 break;
             case '/clear':
                 this.chatClient.clearHistory();
