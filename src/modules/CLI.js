@@ -1,4 +1,5 @@
 const readline = require('readline');
+const CommandHandler = require('./CommandHandler');
 
 class CLI {
     constructor(chatClient) {
@@ -6,6 +7,7 @@ class CLI {
             throw new Error('CLI requires a ChatClient instance.');
         }
         this.chatClient = chatClient;
+        this.commandHandler = new CommandHandler(chatClient);
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
@@ -55,7 +57,7 @@ class CLI {
             const input = line.trim();
 
             if (input.startsWith('/')) {
-                this.handleCommand(input);
+                await this.handleCommand(input);
             } else if (input) {
                 await this.handleChat(input);
             }
@@ -67,42 +69,19 @@ class CLI {
         });
     }
 
-    handleCommand(command) {
-        switch (command.toLowerCase()) {
-            case '/exit':
-            case '/quit':
-                this.rl.close();
-                break;
-            case '/debug':
+    async handleCommand(command) {
+        const context = {
+            reply: (msg) => console.log(msg),
+            toggleDebug: () => {
                 this.showDebug = !this.showDebug;
-                console.log(`Debug mode ${this.showDebug ? 'ENABLED' : 'DISABLED'}`);
-                break;
-            case '/clear':
-                this.chatClient.clearHistory();
-                console.log('Conversation history cleared.');
-                break;
-            case '/history':
-                const history = this.chatClient.getHistory();
-                history.forEach((msg, idx) => {
-                    let contentPreview = '';
-                    if (msg.content) {
-                        contentPreview = msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : '');
-                    }
+                return this.showDebug;
+            },
+            exit: () => {
+                this.rl.close();
+            }
+        };
 
-                    if (msg.tool_calls) {
-                        contentPreview += ` [Tool Calls: ${msg.tool_calls.map(tc => tc.function.name).join(', ')}]`;
-                    }
-
-                    if (msg.role === 'tool') {
-                        contentPreview = `[Result for ${msg.name}] ${contentPreview}`;
-                    }
-
-                    console.log(`[${idx}] ${msg.role}: ${contentPreview}`);
-                });
-                break;
-            default:
-                console.log(`Unknown command: ${command}`);
-        }
+        await this.commandHandler.handle(command, context);
     }
 
     async handleChat(input) {
