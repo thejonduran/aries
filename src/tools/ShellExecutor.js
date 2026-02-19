@@ -2,7 +2,7 @@ const { exec } = require('child_process');
 
 const ShellExecutor = {
     name: 'run_command',
-    description: 'Execute a shell command. Use this to list files, check git status, or run system utilities. Do NOT use this for interactive commands that require user input (like "npm start" or "node"), as they will hang. CONSTRAINT: You MUST use relative paths (e.g., "./src/file.js"). Absolute paths and directory traversal ("..") are FORBIDDEN.',
+    description: `Execute a shell command on a ${process.env.OS || 'Unknown OS'} system. Use this to list files, check git status, or run system utilities. Do NOT use this for interactive commands that require user input (like "npm start" or "node"), as they will hang. CONSTRAINT: You MUST use relative paths (e.g., "./src/file.js"). Absolute paths and directory traversal ("..") are FORBIDDEN.`,
     parameters: {
         type: 'object',
         properties: {
