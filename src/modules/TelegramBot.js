@@ -148,6 +148,11 @@ class TelegramBot {
                 });
             });
 
+            // Log the final response for visibility (server logs + debug stream)
+            if (this.chatClient.logger) {
+                this.chatClient.logger.info(`Response sent to ${chatId}:`, lastText);
+            }
+
         } catch (error) {
             this.bot.sendMessage(chatId, `Error: ${error.message}`);
         }

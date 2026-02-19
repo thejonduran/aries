@@ -20,6 +20,24 @@ async function start() {
 
     try {
         const aries = new Aries();
+
+        // Output all logs to the server console
+        aries.logger.onLog((log) => {
+            const timestamp = log.timestamp;
+            let logMsg = `[${timestamp}] [${log.level}] ${log.message}`;
+            if (log.data) {
+                if (log.data instanceof Error) {
+                    logMsg += `\n${log.data.stack || log.data.message}`;
+                } else {
+                    const json = JSON.stringify(log.data, null, 2);
+                    logMsg += `\n${json}`;
+                }
+            }
+            if (log.level === 'ERROR') console.error(logMsg);
+            else if (log.level === 'WARN') console.warn(logMsg);
+            else console.log(logMsg);
+        });
+
         const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, aries.chatClient);
 
         console.log('Telegram Bot is running...');
