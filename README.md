@@ -8,9 +8,10 @@ Aries is a modular, AI-powered CLI agent designed to interact with OpenAI-compat
 - **Interactive CLI**: A command-line interface with streaming responses.
 - **Tool Support**:
   - **Shell Execution**: Run system shell commands.
-- **Persona Management**: Configurable system persona via `src/Aries.md`.
+- **Persona Management**: Configurable system persona via `src/SYSTEMCORE.md` and `src/PERSONALITY.md`.
 - **Project Structure**:
-- `src/Aries.md`: System prompt definition.
+- `src/SYSTEMCORE.md`: Core system capabilities and constraints.
+- `src/PERSONALITY.md`: Personality, tone, and behavioral guidelines.
 
 1.  Clone the repository.
 2.  Install dependencies:

@@ -19,12 +19,37 @@ class Aries {
         this.chatClient = new ChatClient(this.llmClient, this.toolRegistry, this.logger);
 
         // Load system persona
+        // Load system prompts
         try {
-            const personaPath = path.join(__dirname, 'Aries.md');
-            const persona = fs.readFileSync(personaPath, 'utf8').trim();
-            this.chatClient.setSystemMessage(persona);
+            const corePath = path.join(__dirname, 'SYSTEMCORE.md');
+            const personalityPath = path.join(__dirname, 'PERSONALITY.md');
+
+            let systemPrompt = '';
+
+            // 1. Core System Instructions
+            if (fs.existsSync(corePath)) {
+                systemPrompt += '=== SYSTEM CORE ===\n';
+                systemPrompt += fs.readFileSync(corePath, 'utf8').trim();
+                systemPrompt += '\n\n';
+            } else {
+                this.logger.warn('SYSTEMCORE.md not found. Core instructions missing.');
+            }
+
+            // 2. Personality/Persona
+            if (fs.existsSync(personalityPath)) {
+                systemPrompt += '=== PERSONALITY MODULE ===\n';
+                systemPrompt += fs.readFileSync(personalityPath, 'utf8').trim();
+            } else {
+                this.logger.warn('PERSONALITY.md not found. Using default persona.');
+            }
+
+            if (!systemPrompt) {
+                systemPrompt = 'You are Aries, a helpful and intelligent AI assistant.';
+            }
+
+            this.chatClient.setSystemMessage(systemPrompt.trim());
         } catch (error) {
-            this.logger.error('Failed to load Aries.md', error);
+            this.logger.error('Failed to load system prompts', error);
             // Fallback
             this.chatClient.setSystemMessage('You are Aries, a helpful and intelligent AI assistant.');
         }
