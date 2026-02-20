@@ -1,7 +1,7 @@
 const LLMClient = require('./modules/LLMClient');
 const ChatClient = require('./modules/ChatClient');
 const ToolRegistry = require('./modules/ToolRegistry');
-const ShellExecutor = require('./tools/ShellExecutor'); // Import
+const FileSystemTools = require('./tools/FileSystemTools'); // Import
 const Logger = require('./modules/Logger');
 
 const fs = require('fs');
@@ -14,7 +14,7 @@ class Aries {
         this.toolRegistry = new ToolRegistry();
 
         // Register default tools
-        this.toolRegistry.register(ShellExecutor); // Register
+        this.toolRegistry.register(FileSystemTools); // Register
 
         this.chatClient = new ChatClient(this.llmClient, this.toolRegistry, this.logger);
 

@@ -7,11 +7,10 @@ Aries is a modular, AI-powered CLI agent designed to interact with OpenAI-compat
 - **LLM Integration**: Connects to any OpenAI-compatible provider (e.g., OpenRouter).
 - **Interactive CLI**: A command-line interface with streaming responses.
 - **Tool Support**:
-  - **Shell Execution**: Run system shell commands.
+  - **Filesystem Tools**: Safe file management (read, write, list, search).
 - **Persona Management**: Configurable system persona via `src/SYSTEMCORE.md` and `src/PERSONALITY.md`.
 - **Project Structure**:
-- `src/SYSTEMCORE.md`: Core system capabilities and constraints.
-- `src/PERSONALITY.md`: Personality, tone, and behavioral guidelines.
+## Installation
 
 1.  Clone the repository.
 2.  Install dependencies:
@@ -49,9 +48,9 @@ npm start
 
 - `src/Aries.js`: Main engine entry point.
 - `src/modules/`: Core modules (LLMClient, ChatClient, ToolRegistry, Logger).
-- `src/tools/`: Tool implementations (Calculator, CodeExecutor, ShellExecutor).
+- `src/tools/`: Tool implementations (FileSystemTools).
 - `src/AriesCLI.js`: CLI runner script.
-- `src/persona.md`: System prompt definition.
+- `src/SYSTEMCORE.md`: System prompt definition.
 
 ## Architecture
 
@@ -59,4 +58,4 @@ Aries is built with a focus on modularity:
 - **LLMClient**: Handles low-level API communication.
 - **ChatClient**: Manages state, conversation history, and the tool execution loop.
 - **ToolRegistry**: Registry for available tools.
-- **Tools**: Independent modules that expose capabilities to the LLM.
+- **filesystem_tools**: Provides safe file system access (read/write/search) to the LLM.
