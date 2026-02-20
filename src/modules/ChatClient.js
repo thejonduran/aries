@@ -28,6 +28,7 @@ class ChatClient {
     }
 
     setSystemMessage(content) {
+        this.systemMessageContent = content;
         // Remove existing system message if present (usually the first one)
         if (this.messages.length > 0 && this.messages[0].role === 'system') {
             this.messages[0].content = content;
@@ -46,6 +47,9 @@ class ChatClient {
 
     clearHistory() {
         this.messages = [];
+        if (this.systemMessageContent) {
+            this.messages.push({ role: 'system', content: this.systemMessageContent });
+        }
         this.consecutiveToolCalls = 0;
     }
 
