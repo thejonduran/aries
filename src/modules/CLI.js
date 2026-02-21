@@ -1,48 +1,35 @@
 const readline = require('readline');
-const CommandHandler = require('./CommandHandler');
+const InterfaceAdapter = require('./InterfaceAdapter');
 
-class CLI {
+class CLI extends InterfaceAdapter {
     constructor(chatClient) {
-        if (!chatClient) {
-            throw new Error('CLI requires a ChatClient instance.');
-        }
-        this.chatClient = chatClient;
-        this.commandHandler = new CommandHandler(chatClient);
+        super(chatClient, 'CLI');
+
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
             prompt: '> '
         });
+    }
 
-        this.showDebug = process.env.DEBUG === 'true';
+    onLogReceived(log) {
+        const timestamp = log.timestamp;
+        let logMsg = `[${timestamp}] [${log.level}] ${log.message}`;
 
-        // Subscribe to logger events for real-time output
-        if (this.chatClient.logger && typeof this.chatClient.logger.onLog === 'function') {
-            this.chatClient.logger.onLog((log) => {
-                // Always show INFO, WARN, ERROR. Show DEBUG only if enabled.
-                if (log.level === 'DEBUG' && !this.showDebug) return;
+        if (log.data) {
+            if (log.data instanceof Error) {
+                logMsg += `\n${log.data.stack || log.data.message}`;
+            } else {
+                logMsg += `\n${JSON.stringify(log.data, null, 2)}`;
+            }
+        }
 
-                const timestamp = log.timestamp; // Use timestamp from event
-                let logMsg = `[${timestamp}] [${log.level}] ${log.message}`;
-
-                if (log.data) {
-                    if (log.data instanceof Error) {
-                        logMsg += `\n${log.data.stack || log.data.message}`;
-                    } else {
-                        logMsg += `\n${JSON.stringify(log.data, null, 2)}`;
-                    }
-                }
-
-                // Use console methods to distinguish output streams/colors if needed, 
-                // but for now simple console.log/error matches previous behavior.
-                if (log.level === 'ERROR') {
-                    console.error(logMsg);
-                } else if (log.level === 'WARN') {
-                    console.warn(logMsg);
-                } else {
-                    console.log(logMsg);
-                }
-            });
+        if (log.level === 'ERROR') {
+            console.error(logMsg);
+        } else if (log.level === 'WARN') {
+            console.warn(logMsg);
+        } else {
+            console.log(logMsg);
         }
     }
 
@@ -68,20 +55,12 @@ class CLI {
             process.exit(0);
         });
     }
+    reply(msg) {
+        console.log(msg);
+    }
 
-    async handleCommand(command) {
-        const context = {
-            reply: (msg) => console.log(msg),
-            toggleDebug: () => {
-                this.showDebug = !this.showDebug;
-                return this.showDebug;
-            },
-            exit: () => {
-                this.rl.close();
-            }
-        };
-
-        await this.commandHandler.handle(command, context);
+    exit() {
+        this.rl.close();
     }
 
     async handleChat(input) {

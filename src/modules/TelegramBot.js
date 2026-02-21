@@ -1,26 +1,26 @@
 const TelegramBotAPI = require('node-telegram-bot-api');
-const CommandHandler = require('./CommandHandler');
+const InterfaceAdapter = require('./InterfaceAdapter');
 
-class TelegramBot {
+class TelegramBot extends InterfaceAdapter {
     constructor(token, chatClient) {
         if (!token) {
             throw new Error('TelegramBot requires a valid token.');
         }
-        if (!chatClient) {
-            throw new Error('TelegramBot requires a ChatClient instance.');
-        }
 
-        this.chatClient = chatClient;
-        this.commandHandler = new CommandHandler(chatClient);
+        super(chatClient, 'TelegramBot');
+
         this.bot = new TelegramBotAPI(token, { polling: true });
 
-        // Track debug state per chat. Map<chatId, boolean>
-        this.debugStates = new Map();
+        // We assume a single primary user/admin for debug logs for simplicity
+        this.primaryAdminChatId = null;
 
-        this.initialize();
+        this.start();
     }
 
-    initialize() {
+    /**
+     * Required implementation from InterfaceAdapter
+     */
+    start() {
         console.log('--- Aries Telegram Bot Initialized ---');
 
         // Handle text messages
@@ -30,50 +30,29 @@ class TelegramBot {
 
             if (!text) return; // Ignore non-text messages for now
 
+            // Keep track of the last user to interact so we know where to send logs
+            this.primaryAdminChatId = chatId;
+
             console.log(`[Telegram] Received from ${chatId}: ${text}`);
 
             if (text.startsWith('/')) {
-                await this.handleCommand(chatId, text);
+                // To keep signature matched with InterfaceAdapter framework, we need to bind the chatId somehow or override handleCommand
+                // Since this interface is multi-user theoretically but practically single-user, we'll override it manually or handle it directly here:
+                const context = {
+                    reply: (m) => this.bot.sendMessage(chatId, m),
+                    toggleDebug: () => {
+                        this.showDebug = !this.showDebug; // Global state from Base
+                        return this.showDebug;
+                    },
+                    exit: () => {
+                        this.bot.sendMessage(chatId, "Stopping the bot is not supported via command. Please use server console.");
+                    }
+                };
+                await this.commandHandler.handle(text, context);
             } else {
                 await this.handleChat(chatId, text);
             }
         });
-
-        // Subscribe to logger events to push debug logs to Telegram
-        if (this.chatClient.logger && typeof this.chatClient.logger.onLog === 'function') {
-            this.chatClient.logger.onLog((log) => {
-                // We need to know WHICH chat to send logs to.
-                // For simplicity in this v1, checking if ANY chat has debug enabled might be noisy if there are multiple users.
-                // But typically this is a single-user personal bot.
-                // We will iterate over all active debug sessions.
-
-                this.debugStates.forEach((isDebug, chatId) => {
-                    if (!isDebug) return;
-
-                    // Filter: Only show Debug logs if enabled (which is checked above), 
-                    // but we also want INFO/WARN/ERROR? 
-                    // CLI logic: "Always show INFO, WARN, ERROR. Show DEBUG only if enabled."
-                    // Let's replicate this.
-
-                    if (log.level === 'DEBUG' && !isDebug) return;
-
-                    let logMsg = `[${log.level}] ${log.message}`;
-                    if (log.data) {
-                        if (log.data instanceof Error) {
-                            logMsg += `\n${log.data.message}`;
-                        } else {
-                            // Truncate large objects for Telegram
-                            const json = JSON.stringify(log.data, null, 2);
-                            logMsg += `\n${json.length > 500 ? json.substring(0, 500) + '...' : json}`;
-                        }
-                    }
-
-                    // Send as code block
-                    this.bot.sendMessage(chatId, `\`${logMsg}\``, { parse_mode: 'Markdown' })
-                        .catch(err => console.error(`Failed to send log to ${chatId}:`, err.message));
-                });
-            });
-        }
 
         // Error handling
         this.bot.on('polling_error', (error) => {
@@ -81,21 +60,42 @@ class TelegramBot {
         });
     }
 
-    async handleCommand(chatId, command) {
-        const context = {
-            reply: (msg) => this.bot.sendMessage(chatId, msg),
-            toggleDebug: () => {
-                const currentState = this.debugStates.get(chatId) || false;
-                const newState = !currentState;
-                this.debugStates.set(chatId, newState);
-                return newState;
-            },
-            exit: () => {
-                this.bot.sendMessage(chatId, "Stopping the bot is not supported via command. Please use server console.");
-            }
-        };
+    /**
+     * Required implementation from InterfaceAdapter
+     */
+    onLogReceived(log) {
+        // If no one has interacted yet, skip pushing logs to telegram
+        if (!this.primaryAdminChatId) return;
 
-        await this.commandHandler.handle(command, context);
+        let logMsg = `[${log.level}] ${log.message}`;
+        if (log.data) {
+            if (log.data instanceof Error) {
+                logMsg += `\n${log.data.message}`;
+            } else {
+                // Truncate large objects for Telegram
+                const json = JSON.stringify(log.data, null, 2);
+                logMsg += `\n${json.length > 500 ? json.substring(0, 500) + '...' : json}`;
+            }
+        }
+
+        // Send as code block
+        this.bot.sendMessage(this.primaryAdminChatId, `\`${logMsg}\``, { parse_mode: 'Markdown' })
+            .catch(err => console.error(`Failed to send log to ${this.primaryAdminChatId}:`, err.message));
+    }
+
+    /**
+     * Stubs for InterfaceAdapter signature compliance
+     */
+    reply(msg) {
+        if (this.primaryAdminChatId) {
+            this.bot.sendMessage(this.primaryAdminChatId, msg);
+        }
+    }
+
+    exit() {
+        if (this.primaryAdminChatId) {
+            this.bot.sendMessage(this.primaryAdminChatId, "Stopping the bot is not supported via command. Please use server console.");
+        }
     }
 
     async handleChat(chatId, input) {

@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid'); // Optional, but good for message IDs if needed, otherwise just simple objects. I'll stick to simple objects for now as per user request.
+const ToolExecutor = require('./ToolExecutor');
 
 class ChatClient {
     constructor(llmClient, toolRegistry, logger) {
@@ -8,6 +9,7 @@ class ChatClient {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.logger = logger;
+        this.toolExecutor = new ToolExecutor(toolRegistry, logger);
         this.messages = [];
 
         // Subscribe to logger events
@@ -138,38 +140,11 @@ class ChatClient {
                     tool_calls: toolCalls
                 });
 
-                // Execute tools
-                for (const call of toolCalls) {
-                    // Parse arguments
-                    let args;
-                    try {
-                        args = JSON.parse(call.function.arguments);
-                    } catch (e) {
-                        console.error("Failed to parse tool arguments:", call.function.arguments);
-                        if (this.logger) this.logger.error("Failed to parse tool arguments", e);
-                        args = {};
-                    }
+                // Execute tools via the dedicated service
+                const toolResults = await this.toolExecutor.executeAll(toolCalls);
 
-                    if (this.logger) this.logger.info(`Executing tool: ${call.function.name}`, args);
-
-                    // Execute
-                    let result;
-                    try {
-                        result = await this.toolRegistry.execute(call.function.name, args);
-                        if (this.logger) this.logger.debug(`Tool execution result:`, result);
-                    } catch (err) {
-                        result = JSON.stringify({ error: err.message });
-                        if (this.logger) this.logger.error(`Tool execution failed : ${call.function.name}`, err);
-                    }
-
-                    // Add result to history
-                    this.messages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        name: call.function.name,
-                        content: result
-                    });
-                }
+                // Add results to history
+                this.messages.push(...toolResults);
 
                 // Track consecutive tool calls
                 this.consecutiveToolCalls++;
@@ -192,27 +167,8 @@ class ChatClient {
                 // Normal response (no tools)
                 this.addMessage('assistant', fullResponse);
             }
-
         } else {
-            // Non-streaming logic (simplified for parity, but we mainly use streaming)
-            const msg = response.choices[0]?.message;
-            this.messages.push(msg);
-
-            if (msg.tool_calls && msg.tool_calls.length > 0) {
-                for (const call of msg.tool_calls) {
-                    const args = JSON.parse(call.function.arguments);
-                    const result = await this.toolRegistry.execute(call.function.name, args);
-                    this.messages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        name: call.function.name,
-                        content: result
-                    });
-                }
-                yield* this.chat(null);
-            } else {
-                yield msg.content;
-            }
+            throw new Error('ChatClient only supports streaming mode. Please enable streaming in configuration.');
         }
     }
 }
