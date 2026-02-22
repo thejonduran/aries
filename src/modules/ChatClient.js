@@ -27,6 +27,9 @@ class ChatClient {
         // Tool Loop Safety
         this.consecutiveToolCalls = 0;
         this.toolLimit = parseInt(process.env.TOOL_CALL_LIMIT) || 5;
+
+        // Context Window Safety
+        this.maxHistoryLength = parseInt(process.env.MAX_HISTORY_LENGTH) || 30;
     }
 
     setSystemMessage(content) {
@@ -56,6 +59,68 @@ class ChatClient {
     }
 
     /**
+     * Safely truncates the history to prevent token limit errors.
+     * Ensures the system prompt and cohesive tool sequences aren't broken.
+     */
+    _truncateHistory() {
+        // We only truncate if we exceed the limit significantly (e.g., +10 to prevent chopping every turn)
+        if (this.messages.length <= this.maxHistoryLength + 5) {
+            return;
+        }
+
+        if (this.logger) {
+            this.logger.info(`Truncating conversation history (Length: ${this.messages.length} > Max: ${this.maxHistoryLength})`);
+        }
+
+        // Keep the system message
+        let newHistory = [];
+        if (this.messages.length > 0 && this.messages[0].role === 'system') {
+            newHistory.push(this.messages[0]);
+        }
+
+        // We want to keep the N most recent messages, but we can't break a tool sequence.
+        // For example, if we keep a 'tool' response, we MUST keep the generic 'assistant'
+        // message that initially made the `tool_call`.
+
+        let targetSliceIndex = this.messages.length - this.maxHistoryLength;
+
+        // Look forward from the prospective slice point. If we are cutting halfway through a tool sequence,
+        // we either need to keep the whole sequence or drop the whole sequence.
+        // For safety, let's step backward from the slice point until we hit a clean 'user' or 'assistant'
+        // boundary that isn't part of a tool call.
+
+        let cleanCutFound = false;
+        while (targetSliceIndex > 1) { // 0 is system
+            const msg = this.messages[targetSliceIndex];
+
+            // A clean boundary to cut at is immediately BEFORE a user message
+            // OR immediately before a normal assistant message.
+            if (msg.role === 'user' || (msg.role === 'assistant' && !msg.tool_calls)) {
+                cleanCutFound = true;
+                break;
+            }
+            targetSliceIndex--;
+        }
+
+        // If we couldn't find a clean cut (e.g. massively long tool chain), fallback to slicing right before the end
+        if (!cleanCutFound) {
+            targetSliceIndex = this.messages.length - 10;
+        }
+
+        // Retrieve the safe subset
+        const recentMessages = this.messages.slice(targetSliceIndex);
+
+        // Ensure system message wasn't duplicated
+        if (recentMessages[0].role !== 'system') {
+            newHistory.push(...recentMessages);
+        } else {
+            newHistory = recentMessages;
+        }
+
+        this.messages = newHistory;
+    }
+
+    /**
      * Sends a message and returns an async iterator yielding response chunks.
      * Handles both streaming and non-streaming LLM configurations transparently.
      * @param {string} content - User message content
@@ -77,6 +142,9 @@ class ChatClient {
                 if (this.logger) this.logger.debug('Tools provided to LLM', tools.map(t => t.function.name));
             }
         }
+
+        // Ensure context window size is within limits before sending
+        this._truncateHistory();
 
         let response;
         try {

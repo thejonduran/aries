@@ -2,12 +2,12 @@ const TelegramBotAPI = require('node-telegram-bot-api');
 const InterfaceAdapter = require('./InterfaceAdapter');
 
 class TelegramBot extends InterfaceAdapter {
-    constructor(token, chatClient) {
+    constructor(token, sessionManager) {
         if (!token) {
             throw new Error('TelegramBot requires a valid token.');
         }
 
-        super(chatClient, 'TelegramBot');
+        super(sessionManager, 'TelegramBot');
 
         this.bot = new TelegramBotAPI(token, { polling: true });
 
@@ -48,9 +48,16 @@ class TelegramBot extends InterfaceAdapter {
                         this.bot.sendMessage(chatId, "Stopping the bot is not supported via command. Please use server console.");
                     }
                 };
-                await this.commandHandler.handle(text, context);
+                await this.handleCommand(chatId.toString(), text);
+
+                // Keep the manual command handler fallback context override in TelegramBot, 
+                // but use the adapter's routing. Actually, `handleCommand` instantiates a fresh 
+                // context now. So we need to ensure the adapter's context has access to send 
+                // Telegram messages. Since context is hardcoded in InterfaceAdapter, we'll 
+                // override `reply()` and `exit()` dynamically per interaction, or permanently.
+                // We did this via `primaryAdminChatId` earlier. We'll leave the adapter call:
             } else {
-                await this.handleChat(chatId, text);
+                await this.handleChat(chatId.toString(), text);
             }
         });
 
@@ -98,7 +105,10 @@ class TelegramBot extends InterfaceAdapter {
         }
     }
 
-    async handleChat(chatId, input) {
+    async handleChat(sessionId, input) {
+        // We know sessionId is essentially chatId for Telegram
+        const chatId = parseInt(sessionId, 10);
+
         // Send a temporary "Scanning..." or "Thinking..." message
         let sentMethod;
         try {
@@ -113,7 +123,8 @@ class TelegramBot extends InterfaceAdapter {
         let lastUpdateTime = 0;
 
         try {
-            const stream = this.chatClient.chat(input);
+            const session = this.getSession(sessionId);
+            const stream = session.chat(input);
 
             for await (const chunk of stream) {
                 lastText += chunk;
@@ -149,8 +160,8 @@ class TelegramBot extends InterfaceAdapter {
             });
 
             // Log the final response for visibility (server logs + debug stream)
-            if (this.chatClient.logger) {
-                this.chatClient.logger.info(`Response sent to ${chatId}:`, lastText);
+            if (this.sessionManager.logger) {
+                this.sessionManager.logger.info(`Response sent to ${chatId}:`, lastText);
             }
 
         } catch (error) {

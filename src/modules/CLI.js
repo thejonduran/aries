@@ -2,8 +2,8 @@ const readline = require('readline');
 const InterfaceAdapter = require('./InterfaceAdapter');
 
 class CLI extends InterfaceAdapter {
-    constructor(chatClient) {
-        super(chatClient, 'CLI');
+    constructor(sessionManager) {
+        super(sessionManager, 'CLI');
 
         this.rl = readline.createInterface({
             input: process.stdin,
@@ -44,9 +44,9 @@ class CLI extends InterfaceAdapter {
             const input = line.trim();
 
             if (input.startsWith('/')) {
-                await this.handleCommand(input);
+                await this.handleCommand('cli-local', input);
             } else if (input) {
-                await this.handleChat(input);
+                await this.handleChat('cli-local', input);
             }
 
             this.rl.prompt();
@@ -63,10 +63,12 @@ class CLI extends InterfaceAdapter {
         this.rl.close();
     }
 
-    async handleChat(input) {
+    async handleChat(sessionId, input) {
         try {
             process.stdout.write('Aries: ');
-            const stream = this.chatClient.chat(input);
+
+            const session = this.getSession(sessionId);
+            const stream = session.chat(input);
 
             for await (const chunk of stream) {
                 process.stdout.write(chunk);

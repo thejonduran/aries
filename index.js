@@ -4,8 +4,8 @@ const path = require('path');
 const Aries = require('./src/Aries');
 const CLI = require('./src/modules/CLI');
 const TelegramBot = require('./src/modules/TelegramBot');
-const FileSystemTools = require('./src/tools/FileSystemTools');
 const Logger = require('./src/modules/Logger');
+const ToolLoader = require('./src/utils/ToolLoader');
 
 function loadSystemPrompts(logger) {
     let systemPrompt = '';
@@ -48,10 +48,9 @@ function main() {
         // 1. Gather Dependencies (IoC)
         const systemPrompt = loadSystemPrompts(logger);
 
-        // Define which tools this instance of Aries should have access to
-        const activeTools = [
-            FileSystemTools // From src/tools/FileSystemTools.js
-        ];
+        // Define which tools this instance of Aries should have access to by auto-loading
+        const toolsDir = path.join(__dirname, 'src', 'tools');
+        const activeTools = ToolLoader.loadTools(toolsDir, logger);
 
         // 2. Instantiate core engine
         const aries = new Aries({
@@ -62,12 +61,12 @@ function main() {
 
         // 3. Mount Interfaces based on environment
         // Always mount CLI by default for local execution
-        const cli = new CLI(aries.chatClient);
+        const cli = new CLI(aries.sessionManager);
         cli.start();
 
         // If Telegram token exists, mount the bot in parallel
         if (process.env.TELEGRAM_BOT_TOKEN) {
-            new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, aries.chatClient);
+            new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, aries.sessionManager);
         }
 
     } catch (error) {

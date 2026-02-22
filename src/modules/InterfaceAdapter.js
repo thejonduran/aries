@@ -5,13 +5,12 @@ const CommandHandler = require('./CommandHandler');
  * Unifies debug state, logger subscriptions, and command handling logic.
  */
 class InterfaceAdapter {
-    constructor(chatClient, interfaceName = 'Interface') {
-        if (!chatClient) {
-            throw new Error(`${interfaceName} requires a ChatClient instance.`);
+    constructor(sessionManager, interfaceName = 'Interface') {
+        if (!sessionManager) {
+            throw new Error(`${interfaceName} requires a SessionManager instance.`);
         }
 
-        this.chatClient = chatClient;
-        this.commandHandler = new CommandHandler(chatClient);
+        this.sessionManager = sessionManager;
         this.interfaceName = interfaceName;
 
         // Global debug state for this interface
@@ -22,12 +21,32 @@ class InterfaceAdapter {
     }
 
     /**
-     * Internal method to handle logger events.
-     * Routes logs through the abstract `onLogReceived` method.
+     * Get or create a session for a specific user/interface ID.
+     * @param {string} sessionId 
+     * @returns {ChatClient}
+     */
+    getSession(sessionId) {
+        return this.sessionManager.getSession(sessionId);
+    }
+
+    /**
+     * Helper to get the command handler for a specific session.
+     * Instantiates a new CommandHandler bound to that session's ChatClient.
+     * @param {string} sessionId 
+     * @returns {CommandHandler}
+     */
+    getCommandHandler(sessionId) {
+        const session = this.getSession(sessionId);
+        return new CommandHandler(session);
+    }
+
+    /**
+     * Internal method to handle logger events globally across the engine,
+     * so interfaces can still push generic debug logs.
      */
     _subscribeToLogger() {
-        if (this.chatClient.logger && typeof this.chatClient.logger.onLog === 'function') {
-            this.chatClient.logger.onLog((log) => {
+        if (this.sessionManager.logger && typeof this.sessionManager.logger.onLog === 'function') {
+            this.sessionManager.logger.onLog((log) => {
                 // Ignore DEBUG traces if debug is disabled
                 if (log.level === 'DEBUG' && !this.showDebug) return;
 
@@ -38,11 +57,10 @@ class InterfaceAdapter {
     }
 
     /**
-     * Base implementation for command handling. 
-     * Implementations can override this if they need specific contexts.
+     * @param {string} sessionId The session context to run the command against
      * @param {string} command 
      */
-    async handleCommand(command) {
+    async handleCommand(sessionId, command) {
         const context = {
             reply: (msg) => this.reply(msg),
             toggleDebug: () => {
@@ -51,8 +69,8 @@ class InterfaceAdapter {
             },
             exit: () => this.exit()
         };
-
-        await this.commandHandler.handle(command, context);
+        const handler = this.getCommandHandler(sessionId);
+        await handler.handle(command, context);
     }
 
     // --- Abstract Methods to be implemented by child classes ---
