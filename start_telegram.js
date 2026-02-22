@@ -1,6 +1,40 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const Aries = require('./src/Aries');
 const TelegramBot = require('./src/modules/TelegramBot');
+const Logger = require('./src/modules/Logger');
+const ToolLoader = require('./src/utils/ToolLoader');
+
+function loadSystemPrompts(logger) {
+    let systemPrompt = '';
+    const srcDir = path.join(__dirname, 'src');
+
+    try {
+        const corePath = path.join(srcDir, 'SYSTEMCORE.md');
+        const personalityPath = path.join(srcDir, 'PERSONALITY.md');
+
+        if (fs.existsSync(corePath)) {
+            systemPrompt += '=== SYSTEM CORE ===\n';
+            systemPrompt += fs.readFileSync(corePath, 'utf8').trim();
+            systemPrompt += '\n\n';
+        }
+
+        if (fs.existsSync(personalityPath)) {
+            systemPrompt += '=== PERSONALITY MODULE ===\n';
+            systemPrompt += fs.readFileSync(personalityPath, 'utf8').trim();
+        }
+
+        if (!systemPrompt) {
+            systemPrompt = 'You are Aries, a helpful and intelligent AI assistant.';
+        }
+    } catch (error) {
+        if (logger) logger.error('Failed to load system prompts', error);
+        systemPrompt = 'You are Aries, a helpful and intelligent AI assistant.';
+    }
+
+    return systemPrompt.trim();
+}
 
 async function start() {
     console.log('--- Starting Aries Telegram Bot ---');
@@ -19,26 +53,26 @@ async function start() {
     }
 
     try {
-        const aries = new Aries();
+        const logger = new Logger();
 
-        // Output all logs to the server console
-        aries.logger.onLog((log) => {
-            const timestamp = log.timestamp;
-            let logMsg = `[${timestamp}] [${log.level}] ${log.message}`;
-            if (log.data) {
-                if (log.data instanceof Error) {
-                    logMsg += `\n${log.data.stack || log.data.message}`;
-                } else {
-                    const json = JSON.stringify(log.data, null, 2);
-                    logMsg += `\n${json}`;
-                }
-            }
-            if (log.level === 'ERROR') console.error(logMsg);
-            else if (log.level === 'WARN') console.warn(logMsg);
-            else console.log(logMsg);
+        // 1. Gather Dependencies (IoC)
+        const systemPrompt = loadSystemPrompts(logger);
+
+        // Auto-load tools
+        const toolsDir = path.join(__dirname, 'src', 'tools');
+        const activeTools = ToolLoader.loadTools(toolsDir, logger);
+
+        const aries = new Aries({
+            systemPrompt: systemPrompt,
+            tools: activeTools,
+            logger: logger
         });
 
-        const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, aries.chatClient);
+        // 2. Mount Telegram Bot
+        // NOTE: `.env` seems to be using TELEGRAM_TOKEN, while index.js was using TELEGRAM_BOT_TOKEN
+        // We'll support both for backward compatibility.
+        const token = process.env.TELEGRAM_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+        const bot = new TelegramBot(token, aries.sessionManager);
 
         console.log('Telegram Bot is running...');
     } catch (error) {
