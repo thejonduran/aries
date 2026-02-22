@@ -74,6 +74,10 @@ class TelegramBot extends InterfaceAdapter {
         // If no one has interacted yet, skip pushing logs to telegram
         if (!this.primaryAdminChatId) return;
 
+        // Skip INFO logs to prevent chat clutter (e.g. "User message received", "Executing tool")
+        // We still want DEBUG (if enabled), WARN, and ERROR.
+        if (log.level === 'INFO') return;
+
         let logMsg = `[${log.level}] ${log.message}`;
         if (log.data) {
             if (log.data instanceof Error) {
